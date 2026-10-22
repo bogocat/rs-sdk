@@ -47,6 +47,19 @@ for _ in $(seq 1 60); do
     sleep 0.5
 done
 if kill -0 "$RUNNER_PID" 2>/dev/null; then
+    # A failed script never reaches its logout step, which leaves the character logged in
+    # and burning playtime (the hiscore tiebreak). Recover with the logout helper while the
+    # client is still up, so a crashed batch costs nothing but the stack trace.
+    if ! grep -q "Game session ended (logged-out)" "$RUNNER_LOG"; then
+        echo "[batch] no logout yet; running the logout helper before stopping the client" >&2
+        timeout 60 bun "$ROOT/bots/$BOT/logout.ts" >>"$SCRIPT_LOG" 2>&1 || true
+        for _ in $(seq 1 20); do
+            kill -0 "$RUNNER_PID" 2>/dev/null || break
+            sleep 0.5
+        done
+    fi
+fi
+if kill -0 "$RUNNER_PID" 2>/dev/null; then
     echo "[batch] client did not exit after the script; sending SIGINT (it traps SIGINT, not SIGTERM)" >&2
     kill -INT "$RUNNER_PID" 2>/dev/null
     sleep 3
@@ -62,7 +75,7 @@ if ! grep -q "Game session ended (logged-out)" "$RUNNER_LOG"; then
     tail -5 "$RUNNER_LOG" >&2
     fail "session did not end via logout — playtime is still accruing, hiscores unflushed"
 fi
-[ "$SCRIPT_RC" -eq 0 ] || fail "script failed (rc=$SCRIPT_RC)"
+[ "$SCRIPT_RC" -eq 0 ] || fail "script failed (rc=$SCRIPT_RC); session was logged out cleanly"
 # runner exits 1 on a clean logout: only reason 'stopped' exits 0 (runner.ts:445)
 [ "$RUNNER_RC" -eq 1 ] || echo "[batch] WARN: expected runner rc=1 on logged-out, got $RUNNER_RC"
 

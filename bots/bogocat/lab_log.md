@@ -49,3 +49,50 @@ playtime per level from `/hiscores`. Add the local private gateway (`GATEWAY_URL
 since 1-shot actions still pay two WAN RTTs.
 
 **Cost:** zero LLM in the batch loop; iteration cost is the agent writing scripts only.
+
+## 2026-10-22 — Phase 1: fork patches + gateway A/B
+
+**Fork:** `bogocat/rs-sdk` (patches pushed on `main`). Local clone: `origin` = fork,
+`upstream` = MaxBittker.
+
+**Patches (with verification, not just edits)**
+1. `.gitignore` — `bots/*/*` + negations. Verified: `script.ts`/`lab_log.md` trackable,
+   `bot.env` still ignored.
+2. `sdk/cli.ts` — honors `SHOW_CHAT=false`. Verified by A/B on a live client:
+   `SHOW_CHAT=true` -> `## Player Chat` present (1); `SHOW_CHAT=false` -> absent (0).
+3. `sdk/bug-report.ts` — `TELEMETRY=false` in `bots/*/bot.env` now applies (was
+   `process.env` only). Verified: `bun sdk/bug-report.ts --help` -> "Telemetry is off".
+4. `CLAUDE.md` — bug reporting is operator-only in this fork.
+5. `.pi/mcp.json` — pi's rs-agent MCP entry.
+6. `bots/_template/script.ts` — 600s timeout for batches.
+7. `scripts/batch.sh` — bounded batch wrapper, now with logout recovery: a script that dies
+   before its logout step gets `bots/<bot>/logout.ts` run against the still-up client.
+   Verified with a deliberately failing script: recovery logged out, verdict
+   "script failed (rc=1); session was logged out cleanly".
+
+**Local gateway:** `GATEWAY_HOSTNAME=127.0.0.1 AGENT_PORT=7780 bun run gateway` in
+`server/gateway` (loopback only, auth off — private by design). `GATEWAY_URL` in `bot.env`.
+
+**A/B, same script, 120s each**
+
+| arm | chops | ms/chop | chops/hr | xp gained | xp/hr | trees used |
+|---|---|---|---|---|---|---|
+| remote gateway | 7 | 8729 | 202.5 | 4375 (lvl 34->39) | 126,590 | 5 |
+| local gateway | 15 | 7532 | 445.2 | 9375 (lvl 11->34) | 278,231 | 12 |
+
+Also: **two remote-gateway runs failed outright** before that (17:41, 17:42) — the demo
+gateway closed the lite client's socket (`Gateway closed, reconnecting in 3000ms`) and the
+SDK handshake timed out 30s later. The local gateway passed on the first attempt.
+
+**Honest reading:** chops/hour is the only comparable number across the two arms (xp per log
+scales with level, so the xp/hr columns are not comparable). 2.2x on n=1 per arm is
+suggestive, not established — needs alternating runs at a fixed level. What *is* established:
+the remote gateway is unreliable from this host and the local one is not.
+
+**Hiscore state:** Woodcutting 39, Overall 66, playtime 7m 47s. An idle probe session (~40s
+logged in, no level-up) left the row unchanged — playtime only restamps on level change, so
+that idle time will be charged to the next level-up. Do not leave the client up between probes.
+
+**Next:** Phase 2 — fair A/B (alternating 3x at one level), then reduce ms/chop by camping a
+single tile and re-chopping respawns instead of walking between trees (7.5s/chop is mostly
+walking, not gateway latency).
