@@ -19,5 +19,5 @@ await runScript(async (ctx) => {
     // === END SCRIPT LOGIC ===
 
 }, {
-    timeout: 60_000,  // 1 minute timeout
+    timeout: 600_000,  // 10 min: a bounded batch, not a probe (rs-sdk fork)
 });

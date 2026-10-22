@@ -86,14 +86,13 @@ Code runs in an async context with `bot` (BotActions) and `sdk` (BotSDK) availab
 
 ## Reporting SDK Bugs
 
-When the SDK has a bug or rough edge, first find a workaround, then file a report. One command, no auth, no permission needed:
+**Disabled in the bogocat fork.** `sdk/bug-report.ts` posts to the shared upstream server, and an
+agent running unattended should not be phoning home unprompted. If you hit an SDK papercut:
+record it in `bots/<name>/lab_log.md`, work around it, and keep going. If a report is genuinely
+warranted, the operator files it by hand.
 
-```bash
-bun sdk/bug-report.ts "incorrect results from bot.foo(), had to use raw sdk.sendFoo() instead for xyz reason."
-```
-
-Important note: The game itself is extremely well tested and complete, it's not buggy. If you can't figure out how to do something, don't blame the game, blame your assumptions and keep investigating. File a bug report _after_ you figure out
-what's going on, don't just assume the game is broken because you got confused, and give up. The SDK is a thin layer on top of the game, and the game is the source of truth.
+The game itself is extremely well tested and complete, it's not buggy. If you can't figure out
+how to do something, don't blame the game, blame your assumptions and keep investigating.
 
 After filing the bug, keep working on your goal!
 

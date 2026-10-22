@@ -12,9 +12,14 @@ server.json
 backups/
 .obsidian/
 
-# Bot folders (except template)
-bots/*/
+# Bot folders: keep scripts and lab logs stageable by explicit path, but always
+# ignore credentials. Upstream ignored the whole directory, which made
+# `git add bots/<name>/script.ts` fail without -f.
+bots/*/*
 !bots/_template/
+!bots/*/*.ts
+!bots/*/*.md
+bots/*/bot.env
 
 # Daemon type checker temp file
 sdk/__exec_check.ts

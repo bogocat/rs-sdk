@@ -13,6 +13,7 @@
 import { BotSDK, deriveGatewayUrl } from './index';
 import { formatWorldState } from './formatter';
 import type { BotWorldState } from './types';
+import { isPlayerChat } from './types';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -144,7 +145,7 @@ To execute code on a bot, use the MCP execute_code tool instead.
 /**
  * Try to load credentials from bots/<name>/bot.env
  */
-function tryLoadBotEnv(botName: string): { username: string; password: string; server?: string; gatewayUrl?: string } | null {
+function tryLoadBotEnv(botName: string): { username: string; password: string; server?: string; gatewayUrl?: string; showChat?: boolean } | null {
     const envPath = join(process.cwd(), 'bots', botName, 'bot.env');
     if (!existsSync(envPath)) return null;
 
@@ -166,7 +167,12 @@ function tryLoadBotEnv(botName: string): { username: string; password: string; s
         username: env.BOT_USERNAME,
         password: env.PASSWORD,
         server: env.SERVER,
-        gatewayUrl: env.GATEWAY_URL
+        gatewayUrl: env.GATEWAY_URL,
+        // SHOW_CHAT=false in bot.env must also gate this dump: the demo server broadcasts
+        // public chat world-wide, and for an agent harness this stdout is untrusted input.
+        showChat: env.SHOW_CHAT === undefined
+            ? undefined
+            : !['false', '0', 'no', 'off'].includes(env.SHOW_CHAT.trim().toLowerCase())
     };
 }
 
@@ -234,6 +240,12 @@ async function fetchState(botName: string, flags: { server: string; timeout: num
         result = await connectAndAwaitState(sdk, gatewayUrl, username, timeout);
     }
     const { state, stateAge } = result;
+
+    // Honor SHOW_CHAT=false from bots/<name>/bot.env (rs-sdk fork patch): strip player
+    // speech before it reaches stdout/JSON. System messages are kept.
+    if (botEnv?.showChat === false && state.gameMessages) {
+        state.gameMessages = state.gameMessages.filter((m: { type: number }) => !isPlayerChat(m.type));
+    }
 
     if (flags.json) {
         console.log(JSON.stringify(state, null, 2));

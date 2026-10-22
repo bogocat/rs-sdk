@@ -13,6 +13,8 @@
 // Opt out with TELEMETRY=false (in bot.env or the environment).
 
 import { execFileSync } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * Where reports go. Always the shared server, never whatever SERVER a bot happens
@@ -36,11 +38,34 @@ function sdkCommit(): string {
 /**
  * Telemetry (i.e. bug reports leaving this machine) is on by default.
  * Set TELEMETRY to false/0/no/off to disable it.
+ *
+ * rs-sdk fork patch: the comment above used to promise "in bot.env or the
+ * environment", but only process.env was read - so TELEMETRY=false in a bot's
+ * bot.env was decorative. Now a false in any bots/<name>/bot.env disables
+ * reports for the whole checkout (conservative: one opted-out bot silences
+ * the drop box, because there is no way to tell which bot is reporting).
  */
+function telemetryOff(value: string | undefined): boolean {
+    if (!value) return false;
+    return ['false', '0', 'no', 'off'].includes(value.trim().toLowerCase());
+}
+
 function telemetryEnabled(): boolean {
-    const value = process.env.TELEMETRY?.trim().toLowerCase();
-    if (!value) return true;
-    return !['false', '0', 'no', 'off'].includes(value);
+    if (process.env.TELEMETRY !== undefined) return !telemetryOff(process.env.TELEMETRY);
+
+    const root = join(import.meta.dir, '..');
+    const botsDir = join(root, 'bots');
+    if (existsSync(botsDir)) {
+        for (const entry of readdirSync(botsDir, { withFileTypes: true })) {
+            if (!entry.isDirectory()) continue;
+            const envPath = join(botsDir, entry.name, 'bot.env');
+            if (!existsSync(envPath)) continue;
+            const match = /^\s*TELEMETRY\s*=\s*(\S+)/m.exec(readFileSync(envPath, 'utf8'));
+            if (match && telemetryOff(match[1])) return false;
+        }
+    }
+
+    return true;
 }
 
 async function main() {
